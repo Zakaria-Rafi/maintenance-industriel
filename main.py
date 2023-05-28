@@ -1,6 +1,7 @@
 import tkinter as tk
+from tkinter import ttk, messagebox, filedialog
 import sqlite3
-from tkinter import ttk
+from PIL import Image, ImageTk
 
 # Connexion à la base de données
 conn = sqlite3.connect("maintenance.db")
@@ -18,6 +19,13 @@ c.execute('''CREATE TABLE IF NOT EXISTS maintenances
              panne_id INTEGER,
              description TEXT,
              etat TEXT,
+             FOREIGN KEY (panne_id) REFERENCES pannes(id))''')
+
+# Création de la table pour les photos associées aux pannes
+c.execute('''CREATE TABLE IF NOT EXISTS photos
+             (id INTEGER PRIMARY KEY AUTOINCREMENT,
+             panne_id INTEGER,
+             path TEXT,
              FOREIGN KEY (panne_id) REFERENCES pannes(id))''')
 
 # Fonction pour ajouter une panne à la base de données
@@ -66,6 +74,72 @@ def terminer_maintenance():
         conn.commit()
         rafraichir_liste_maintenances()
 
+# Fonction pour afficher les détails d'une panne
+def afficher_details_panne():
+    selected_item = liste_pannes.selection()
+    if selected_item:
+        panne_id = liste_pannes.item(selected_item)['values'][0]
+        c.execute("SELECT description FROM pannes WHERE id=?", (panne_id,))
+        description = c.fetchone()[0]
+        if description:
+            details_window = tk.Toplevel(fenetre)
+            details_window.title("Détails de la Panne")
+
+            # Champ d'entrée pour la description
+            description_label = ttk.Label(details_window, text="Description:")
+            description_label.pack(padx=10, pady=10)
+            description_entry = ttk.Entry(details_window)
+            description_entry.insert(0, description)
+            description_entry.pack(padx=10, pady=5)
+
+            # Bouton Enregistrer pour sauvegarder les modifications
+            enregistrer_button = ttk.Button(details_window, text="Enregistrer",
+                                            command=lambda: enregistrer_description(panne_id, description_entry.get()))
+            enregistrer_button.pack(padx=10, pady=5)
+
+            # Bouton pour ajouter une photo
+            ajouter_photo_button = ttk.Button(details_window, text="Ajouter une photo", command=lambda: ajouter_photo(panne_id))
+            ajouter_photo_button.pack(padx=10, pady=5)
+
+            # Afficher les photos existantes
+            afficher_photos(panne_id, details_window)
+
+        else:
+            messagebox.showinfo("Aucun détail", "Aucun détail n'est disponible pour cette panne.")
+
+# Fonction pour enregistrer la description modifiée
+def enregistrer_description(panne_id, nouvelle_description):
+    c.execute("UPDATE pannes SET description=? WHERE id=?", (nouvelle_description, panne_id))
+    conn.commit()
+    messagebox.showinfo("Sauvegarde réussie", "La description a été mise à jour avec succès.")
+
+# Fonction pour ajouter une photo
+def ajouter_photo(panne_id):
+    file_path = filedialog.askopenfilename(filetypes=[("Image Files", "*.jpg;*.jpeg;*.png")])
+    if file_path:
+        # Copier l'image dans un répertoire spécifique (par exemple, "photos") et stocker le chemin d'accès dans la base de données
+        new_path = f"photos/{panne_id}.png"
+        Image.open(file_path).save(new_path)
+        c.execute("INSERT INTO photos (panne_id, path) VALUES (?, ?)", (panne_id, new_path))
+        conn.commit()
+        messagebox.showinfo("Ajout de photo", "La photo a été ajoutée avec succès.")
+
+# Fonction pour afficher les photos associées à une panne
+def afficher_photos(panne_id, parent):
+    c.execute("SELECT path FROM photos WHERE panne_id=?", (panne_id,))
+    photos = c.fetchall()
+    if photos:
+        for photo in photos:
+            img = Image.open(photo[0])
+            img = img.resize((200, 200))
+            photo_tk = ImageTk.PhotoImage(img)
+            photo_label = ttk.Label(parent, image=photo_tk)
+            photo_label.image = photo_tk
+            photo_label.pack(padx=10, pady=5)
+    else:
+        aucune_photo_label = ttk.Label(parent, text="Aucune photo disponible.")
+        aucune_photo_label.pack(padx=10, pady=5)
+
 # Fonction pour mettre à jour la liste des pannes
 def rafraichir_liste_pannes():
     liste_pannes.delete(*liste_pannes.get_children())
@@ -82,6 +156,24 @@ def rafraichir_liste_maintenances():
     for maintenance in maintenances:
         liste_maintenances.insert('', tk.END, values=maintenance)
 
+# Fonction pour effectuer une recherche
+def rechercher():
+    keywords = search_entry.get()
+    liste_pannes.delete(*liste_pannes.get_children())
+    liste_maintenances.delete(*liste_maintenances.get_children())
+
+    # Recherche dans la table 'pannes'
+    c.execute("SELECT id, description FROM pannes WHERE description LIKE ?", ('%'+keywords+'%',))
+    pannes = c.fetchall()
+    for panne in pannes:
+        liste_pannes.insert('', tk.END, values=panne)
+
+    # Recherche dans la table 'maintenances'
+    c.execute("SELECT maintenances.id, pannes.description, maintenances.description, maintenances.etat FROM maintenances INNER JOIN pannes ON maintenances.panne_id = pannes.id WHERE pannes.description LIKE ? OR maintenances.description LIKE ?", ('%'+keywords+'%', '%'+keywords+'%'))
+    maintenances = c.fetchall()
+    for maintenance in maintenances:
+        liste_maintenances.insert('', tk.END, values=maintenance)
+
 # Création de la fenêtre principale
 fenetre = tk.Tk()
 fenetre.title("Logiciel de Maintenance Industrielle")
@@ -89,6 +181,8 @@ fenetre.title("Logiciel de Maintenance Industrielle")
 # Style
 style = ttk.Style()
 style.theme_use('clam')
+style.configure("TLabel", font=("Arial", 12))
+style.configure("TButton", font=("Arial", 12))
 
 # Cadre pour les pannes
 cadre_pannes = ttk.Frame(fenetre, padding=10)
@@ -118,13 +212,17 @@ bouton_ajouter_panne.pack(side=tk.LEFT, padx=5)
 bouton_supprimer_panne = ttk.Button(boutons_pannes_frame, text="Supprimer Panne", command=supprimer_panne)
 bouton_supprimer_panne.pack(side=tk.LEFT, padx=5)
 
+# Menu contextuel pour les pannes
+menu_pannes = tk.Menu(liste_pannes, tearoff=0)
+menu_pannes.add_command(label="Afficher les Détails", command=afficher_details_panne)
+liste_pannes.bind("<Button-3>", lambda event: menu_pannes.post(event.x_root, event.y_root))
+
 # Cadre pour les maintenances
 cadre_maintenances = ttk.Frame(fenetre, padding=10)
 cadre_maintenances.pack(side=tk.RIGHT, padx=10)
 
 maintenances_label = ttk.Label(cadre_maintenances, text="Maintenances en cours", font=("Arial", 14))
 maintenances_label.pack(pady=10)
-
 
 # Liste des maintenances en cours
 liste_maintenances = ttk.Treeview(cadre_maintenances, columns=("ID", "Panne", "Description", "État"), show="headings")
@@ -159,6 +257,16 @@ maintenance_entry.pack()
 # Entry widget for issue descriptions
 panne_entry = ttk.Entry(cadre_pannes)
 panne_entry.pack()
+
+# Create a search entry widget
+search_entry = ttk.Entry(fenetre)
+search_entry.pack(side=tk.TOP, padx=10, pady=10)
+search_entry.bind('<Return>', lambda event: rechercher())  # Bind Enter key press event to search function
+
+# Create a search button
+search_button = ttk.Button(fenetre, text="Rechercher", command=rechercher)
+search_button.pack(side=tk.TOP, padx=10, pady=5)
+
 # Récupération des pannes et des maintenances depuis la base de données
 rafraichir_liste_pannes()
 rafraichir_liste_maintenances()
