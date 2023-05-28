@@ -2,7 +2,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import sqlite3
 from PIL import Image, ImageTk
-
+import os
+from panne_details_window import DetailsPanneWindow
 # Connexion à la base de données
 conn = sqlite3.connect("maintenance.db")
 c = conn.cursor()
@@ -74,7 +75,9 @@ def terminer_maintenance():
         conn.commit()
         rafraichir_liste_maintenances()
 
-# Fonction pour afficher les détails d'une panne
+
+
+
 def afficher_details_panne():
     selected_item = liste_pannes.selection()
     if selected_item:
@@ -82,30 +85,12 @@ def afficher_details_panne():
         c.execute("SELECT description FROM pannes WHERE id=?", (panne_id,))
         description = c.fetchone()[0]
         if description:
-            details_window = tk.Toplevel(fenetre)
-            details_window.title("Détails de la Panne")
-
-            # Champ d'entrée pour la description
-            description_label = ttk.Label(details_window, text="Description:")
-            description_label.pack(padx=10, pady=10)
-            description_entry = ttk.Entry(details_window)
-            description_entry.insert(0, description)
-            description_entry.pack(padx=10, pady=5)
-
-            # Bouton Enregistrer pour sauvegarder les modifications
-            enregistrer_button = ttk.Button(details_window, text="Enregistrer",
-                                            command=lambda: enregistrer_description(panne_id, description_entry.get()))
-            enregistrer_button.pack(padx=10, pady=5)
-
-            # Bouton pour ajouter une photo
-            ajouter_photo_button = ttk.Button(details_window, text="Ajouter une photo", command=lambda: ajouter_photo(panne_id))
-            ajouter_photo_button.pack(padx=10, pady=5)
-
-            # Afficher les photos existantes
-            afficher_photos(panne_id, details_window)
-
+            details_window = DetailsPanneWindow(fenetre, panne_id, conn)
+            details_window.grab_set()  # Empêcher l'accès à la fenêtre principale
         else:
             messagebox.showinfo("Aucun détail", "Aucun détail n'est disponible pour cette panne.")
+
+
 
 # Fonction pour enregistrer la description modifiée
 def enregistrer_description(panne_id, nouvelle_description):
