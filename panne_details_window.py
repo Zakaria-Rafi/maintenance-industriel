@@ -51,3 +51,16 @@ class DetailsPanneWindow(tk.Toplevel):
         c.execute("UPDATE pannes SET description=? WHERE id=?", (nouvelle_description, self.panne_id))
         self.conn.commit()
         messagebox.showinfo("Sauvegarde réussie", "La description a été mise à jour avec succès.")
+    def afficher_photos(self):
+        c = self.conn.cursor()
+        c.execute("SELECT path FROM photos WHERE panne_id=?", (self.panne_id,))
+        photo_paths = c.fetchall()
+        
+        for path in photo_paths:
+            image = Image.open(path[0])
+            image.thumbnail((300, 300))  # Resize the image to fit within a specific size
+            photo = ImageTk.PhotoImage(image)
+
+            self.photo_label = ttk.Label(self, image=photo)
+            self.photo_label.image = photo  # Store a reference to the photo to avoid garbage collection
+            self.photo_label.pack(padx=10, pady=5)
