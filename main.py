@@ -98,32 +98,6 @@ def enregistrer_description(panne_id, nouvelle_description):
     conn.commit()
     messagebox.showinfo("Sauvegarde réussie", "La description a été mise à jour avec succès.")
 
-# Fonction pour ajouter une photo
-def ajouter_photo(panne_id):
-    file_path = filedialog.askopenfilename(filetypes=[("Image Files", "*.jpg;*.jpeg;*.png")])
-    if file_path:
-        # Copier l'image dans un répertoire spécifique (par exemple, "photos") et stocker le chemin d'accès dans la base de données
-        new_path = f"photos/{panne_id}.png"
-        Image.open(file_path).save(new_path)
-        c.execute("INSERT INTO photos (panne_id, path) VALUES (?, ?)", (panne_id, new_path))
-        conn.commit()
-        messagebox.showinfo("Ajout de photo", "La photo a été ajoutée avec succès.")
-
-# Fonction pour afficher les photos associées à une panne
-def afficher_photos(panne_id, parent):
-    c.execute("SELECT path FROM photos WHERE panne_id=?", (panne_id,))
-    photos = c.fetchall()
-    if photos:
-        for photo in photos:
-            img = Image.open(photo[0])
-            img = img.resize((200, 200))
-            photo_tk = ImageTk.PhotoImage(img)
-            photo_label = ttk.Label(parent, image=photo_tk)
-            photo_label.image = photo_tk
-            photo_label.pack(padx=10, pady=5)
-    else:
-        aucune_photo_label = ttk.Label(parent, text="Aucune photo disponible.")
-        aucune_photo_label.pack(padx=10, pady=5)
 
 # Fonction pour mettre à jour la liste des pannes
 def rafraichir_liste_pannes():
